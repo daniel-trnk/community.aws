@@ -318,6 +318,10 @@ def find_address(ec2, module, public_ip, device_id, is_instance=True):
         # If we're releasing and we can't find it, it's already gone...
         if module.params.get('state') == 'absent':
             module.exit_json(changed=False, disassociated=False, released=False)
+
+        if public_ip:
+            return None
+
         module.fail_json_aws(e, msg="Couldn't obtain list of existing Elastic IP addresses")
 
     addresses = addresses["Addresses"]
@@ -342,10 +346,13 @@ def address_is_associated_with_device(ec2, module, address, device_id, is_instan
     return False
 
 
-def allocate_address(ec2, module, domain, reuse_existing_ip_allowed, check_mode, tag_dict=None, public_ipv4_pool=None):
+def allocate_address(ec2, module, domain, reuse_existing_ip_allowed, check_mode, tag_dict=None, public_ipv4_pool=None, public_ip=None):
     """ Allocate a new elastic IP address (when needed) and return it """
     if not domain:
         domain = 'standard'
+
+    if public_ip:
+        return allocate_specific_byoip(ec2, module, domain, check_mode, public_ip), True
 
     if reuse_existing_ip_allowed:
         filters = []
@@ -483,6 +490,27 @@ def ensure_absent(ec2, module, address, device_id, check_mode, is_instance=True)
         return release_address(ec2, module, address, check_mode)
 
 
+def allocate_specific_byoip(ec2, module, domain, check_mode, public_ip):
+    # type: (EC2Connection, AnsibleAWSModule, str, bool, str) -> Address
+    """ Overrides botocore's allocate_address function to support BYOIP """
+    if check_mode:
+        return None
+
+    params = {}
+
+    if domain is not None:
+        params['Domain'] = domain
+
+    if public_ip is not None:
+        params['Address'] = public_ip
+
+    try:
+        result = ec2.allocate_address(aws_retry=True, **params)
+    except (botocore.exceptions.BotoCoreError, botocore.exceptions.ClientError) as e:
+        module.fail_json_aws(e, msg="Couldn't allocate Elastic IP address")
+    return result
+
+
 def allocate_address_from_pool(ec2, module, domain, check_mode, public_ipv4_pool):
     # type: (EC2Connection, AnsibleAWSModule, str, bool, str) -> Address
     """ Overrides botocore's allocate_address function to support BYOIP """
@@ -609,7 +637,7 @@ def main():
                 else:
                     address, changed = allocate_address(
                         ec2, module, domain, reuse_existing_ip_allowed,
-                        module.check_mode, tag_dict, public_ipv4_pool
+                        module.check_mode, tag_dict, public_ipv4_pool, public_ip
                     )
                     if address:
                         result = {
