@@ -1,6 +1,6 @@
 namespace: community
 name: aws
-version: 4.0.0
+version: 4.0.0-trnk
 readme: README.md
 authors:
   - Ansible (https://github.com/ansible)
