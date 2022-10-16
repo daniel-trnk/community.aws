@@ -433,7 +433,7 @@ def find_device(ec2, module, device_id, is_instance=True):
             return interfaces[0]
 
 
-def ensure_present(ec2, module, domain, address, private_ip_address, device_id,
+def ensure_present(ec2, module, domain, address, private_ip_address, public_ip, device_id,
                    reuse_existing_ip_allowed, allow_reassociation, check_mode, is_instance=True):
     changed = False
 
@@ -442,7 +442,7 @@ def ensure_present(ec2, module, domain, address, private_ip_address, device_id,
         if check_mode:
             return {'changed': True}
 
-        address, changed = allocate_address(ec2, module, domain, reuse_existing_ip_allowed, check_mode)
+        address, changed = allocate_address(ec2, module, domain, reuse_existing_ip_allowed, check_mode, public_ip=public_ip)
 
     if device_id:
         # Allocate an IP for instance since no public_ip was provided
@@ -620,7 +620,7 @@ def main():
         if state == 'present':
             if device_id:
                 result = ensure_present(
-                    ec2, module, domain, address, private_ip_address, device_id,
+                    ec2, module, domain, address, private_ip_address, public_ip, device_id,
                     reuse_existing_ip_allowed, allow_reassociation,
                     module.check_mode, is_instance=is_instance
                 )
